@@ -1,18 +1,50 @@
-# Laboratório para Simulação Prática de Testbench
 
-Esse laboratório tem por objetivo a realização de uma prática de avaliação e simulação de código em processador ARM de prova de conceito, disponibilizado nas versões monociclio, multiciclo e pipelined, conforme apresentado em sala de aula.
+# Extensão de Processador ARM Monociclo
 
-## Análise manual
+Este repositório apresenta a implementação e a ampliação de um processador ARM com arquitetura monociclo, desenvolvido em **SystemVerilog**. A versão inicial da arquitetura conta com caminho de dados e unidade de controle separados, com suporte a instruções básicas. O projeto foi posteriormente expandido com novas instruções e módulos complementares.
 
-Considerando o código Assembly em memfile.s e o código disponível em memfile.dat, verifique a reciprocidade dos códigos. Considerando a fórmula de avaliação de tempo de execução, para avaliação hipotética manual, faça uma estimativa do tempo de execução esperado para cada processador. Descubra, por meio do módulo de testbench inerente a cada simulador, o tempo de clock, verifique o número de instruções e o CPI de cada processador.
+## 📁 Estrutura do Repositório
 
-### Execução do Código no Processador em Ambiente Simulado
+```
+├── src/
+│   ├── arm_multi.sv
+│   ├── arm_multi.vhd
+│   ├── arm_pipelined.sv
+│   ├── arm_pipelined.vhd
+│   └── arm_single.sv
+│   └── arm_single.vhd
+├── testbench/
+│   ├── memfile.s             # Programa de teste original (assembly)
+│   ├── memfile.dat           # Programa de teste original (binário)
+├── schematic/
+│   └── processor\_diagram.png # Diagrama esquemático do processador
+├── doc/
+│   ├── Trabalho Prático.md         # Descrição do trabalho
+├── README.md
+└── LICENSE
+```
+## ⚙️ Funcionalidades
 
-Utilizando o VSIM, inicialize um projeto com os respectivos processadores. Utilizando-se da prática com simulação da ULA, execute a simulação e verifique as instruções em execução na timeline de simulação. Identifique as instruções correspondentes no arquivo memfile.dat.
+* Simulação de processador ARM monociclo com suporte às instruções:
 
-Compare a execução das instruções nos processadores monociclo, multiciclo e pipeline, identifique os módulos chaves da simulação do datapath e da unidade de controle e analise o passado a passo da execução da instrução.
+  * ADD, SUB, AND, ORR, LDR, STR, B
+* Extensão para incluir novas instruções:
 
-Verifique o tempo de execução do programa em cada processador utilizando a timeline e a saída do testbench. Analisando o testbench, qual é a verificação automática utilizada no testbench para validação no terminal?
+  * MOV, CMP, TST, EOR, LSL, ASR, BL
+  * Suporte a registradores com deslocamento em instruções do tipo DP
+* Testbench customizado para validação funcional
 
-## Resultados
-Envie os resultados obtidos em um relatório simples da sua dupla no respectivo espaço disponível no AVA. Utilize um projeto GIT para esse fim, se preferir, e compartilhe o acesso junto ao professor.
+## ▶️ Como Usar
+
+1. Compile os arquivos SystemVerilog localizados em `src/` utilizando o ModelSim ou outro simulador compatível.
+2. Carregue o arquivo `memfile.dat` (ou `memfile2.dat`) na memória de instruções.
+3. Execute a simulação e analise os sinais através do simulador.
+
+## 🧩 Dependências
+
+* [ModelSim](https://www.intel.com/content/www/us/en/software/programmable/quartus-prime/modelSim.html) (ou outro simulador compatível)
+* Editor de texto com suporte a Verilog/SystemVerilog, como Visual Studio Code
+
+## 📄 Licença
+
+O código está disponível sob uma licença de uso livre, destinada exclusivamente a fins educacionais e não comerciais.
