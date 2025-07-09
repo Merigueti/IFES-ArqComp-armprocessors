@@ -1,0 +1,6 @@
+MOV R0, #0b1010      // R0 = 1010 binário (10 decimal)
+MOV R1, #0b1100      // R1 = 1100 binário (12 decimal)
+MOV R2, #0b0010      // R2 = 0010 binário (2 decimal)
+TST R0, R1             // 1010 AND 1100 = 1000 (não zero)
+TST R0, #0b0010      // 1010 AND 0010 = 0010 (não zero)
+TST R0, #0b0100      // 1010 AND 0100 = 0000 (zero)

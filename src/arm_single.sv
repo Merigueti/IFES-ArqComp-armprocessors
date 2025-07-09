@@ -118,23 +118,15 @@ module decoder(input  logic [1:0] Op,
 
   logic [9:0] controls;
   logic       Branch, ALUOp;
+  logic       regw_internal;
 
   // Main Decoder
   always_comb
     case(Op)
                             // Data processing immediate
       2'b00: begin
-        if (Funct[5]) begin // Immediate
-          if (Funct[4:1] == 4'b1010) // CMP
-            controls = 10'b0000100001; // RegW = 0
-          else
-            controls = 10'b0000101001;
-        end else begin      // Register
-          if (Funct[4:1] == 4'b1010) // CMP
-            controls = 10'b0000000001; // RegW = 0
-          else
-            controls = 10'b0000001001;
-        end
+        if (Funct[5])       controls = 10'b0000101001;
+        else                controls = 10'b0000001001;
       end
                             // LDR
       2'b01: if (Funct[0])  controls = 10'b0001111000; 
@@ -147,31 +139,48 @@ module decoder(input  logic [1:0] Op,
     endcase
 
   assign {RegSrc, ImmSrc, ALUSrc, MemtoReg, 
-          RegW, MemW, Branch, ALUOp} = controls; 
+          regw_internal, MemW, Branch, ALUOp} = controls;
           
   // ALU Decoder             
   always_comb
     if (ALUOp) begin                 // which DP Instr?
       case(Funct[4:1])
         4'b0100: ALUControl = 2'b00; // ADD
-        4'b1101: ALUControl = 2'b00; // MOV
+        4'b1101: ALUControl = 2'b00; // MOV (ADD)
         4'b0010: ALUControl = 2'b01; // SUB
-        4'b1010: ALUControl = 2'b01; // CMP usa SUB
+        4'b1010: ALUControl = 2'b01; // CMP (SUB)
         4'b0000: ALUControl = 2'b10; // AND
+        4'b1000: ALUControl = 2'b10; // TST (AND)
         4'b1100: ALUControl = 2'b11; // ORR
         default: ALUControl = 2'bx;  // unimplemented
       endcase
-      MovF     = (Funct[4:1] == 4'b1101); // MOV
-      // update flags if S bit is set 
-      // (C & V only updated para aritméticas)
+      if (Funct[4:1] == 4'b1101)
+        MovF = 1;
+      else
+        MovF = 0;
+
       FlagW[1] = Funct[0]; // S-bit
-      FlagW[0] = Funct[0] & 
-                 (ALUControl == 2'b00 | ALUControl == 2'b01);
+      FlagW[0] = Funct[0] & (
+                    ALUControl == 2'b00 | // ADD/MOV
+                    ALUControl == 2'b01 | // SUB/CMP
+                    ALUControl == 2'b10   // AND/TST
+                  );
+    
     end else begin
       ALUControl = 2'b00; // default ADD
       FlagW      = 2'b00; // don't update Flags
       MovF       = 0;
     end
+  
+  always_comb begin
+    if (ALUOp && (
+        Funct[4:1] == 4'b1010 || // CMP
+        Funct[4:1] == 4'b1000    // TST
+      ))
+      RegW = 1'b0;
+    else
+      RegW = regw_internal;
+  end
 
   // PC Logic
   assign PCS = ((Rd == 4'b1111) & RegW) | Branch;
