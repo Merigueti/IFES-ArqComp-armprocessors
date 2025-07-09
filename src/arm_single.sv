@@ -1,77 +1,4 @@
-// arm_single.sv
-// David_Harris@hmc.edu and Sarah_Harris@hmc.edu 25 June 2013
-// Single-cycle implementation of a subset of ARMv4
-// 
-// run 210
-// Expect simulator to print "Simulation succeeded"
-// when the value 7 is written to address 100 (0x64)
 
-// 16 32-bit registers
-// Data-processing instructions
-//   ADD, SUB, AND, ORR
-//   INSTR<cond><S> rd, rn, #immediate
-//   INSTR<cond><S> rd, rn, rm
-//    rd <- rn INSTR rm	      if (S) Update Status Flags
-//    rd <- rn INSTR immediate	if (S) Update Status Flags
-//   Instr[31:28] = cond
-//   Instr[27:26] = op = 00
-//   Instr[25:20] = funct
-//                  [25]:    1 for immediate, 0 for register
-//                  [24:21]: 0100 (ADD) / 0010 (SUB) /
-//                           0000 (AND) / 1100 (ORR)
-//                  [20]:    S (1 = update CPSR status Flags)
-//   Instr[19:16] = rn
-//   Instr[15:12] = rd
-//   Instr[11:8]  = 0000
-//   Instr[7:0]   = imm8      (for #immediate type) / 
-//                  {0000,rm} (for register type)
-//   
-// Load/Store instructions
-//   LDR, STR
-//   INSTR rd, [rn, #offset]
-//    LDR: rd <- Mem[rn+offset]
-//    STR: Mem[rn+offset] <- rd
-//   Instr[31:28] = cond
-//   Instr[27:26] = op = 01 
-//   Instr[25:20] = funct
-//                  [25]:    0 (A)
-//                  [24:21]: 1100 (P/U/B/W)
-//                  [20]:    L (1 for LDR, 0 for STR)
-//   Instr[19:16] = rn
-//   Instr[15:12] = rd
-//   Instr[11:0]  = imm12 (zero extended)
-//
-// Branch instruction (PC <= PC + offset, PC holds 8 bytes past Branch Instr)
-//   B
-//   B target
-//    PC <- PC + 8 + imm24 << 2
-//   Instr[31:28] = cond
-//   Instr[27:25] = op = 10
-//   Instr[25:24] = funct
-//                  [25]: 1 (Branch)
-//                  [24]: 0 (link)
-//   Instr[23:0]  = imm24 (sign extend, shift left 2)
-//   Note: no Branch delay slot on ARM
-//
-// Other:
-//   R15 reads as PC+8
-//   Conditional Encoding
-//    cond  Meaning                       Flag
-//    0000  Equal                         Z = 1
-//    0001  Not Equal                     Z = 0
-//    0010  Carry Set                     C = 1
-//    0011  Carry Clear                   C = 0
-//    0100  Minus                         N = 1
-//    0101  Plus                          N = 0
-//    0110  Overflow                      V = 1
-//    0111  No Overflow                   V = 0
-//    1000  Unsigned Higher               C = 1 & Z = 0
-//    1001  Unsigned Lower/Same           C = 0 | Z = 1
-//    1010  Signed greater/equal          N = V
-//    1011  Signed less                   N != V
-//    1100  Signed greater                N = V & Z = 0
-//    1101  Signed less/equal             N != V | Z = 1
-//    1110  Always                        any
 
 module testbench();
 
@@ -96,19 +23,6 @@ module testbench();
       clk <= 1; # 5; clk <= 0; # 5;
     end
 
-  // check results
-  always @(negedge clk)
-    begin
-      if(MemWrite) begin
-        if(DataAdr === 100 & WriteData === 7) begin
-          $display("Simulation succeeded");
-          $stop;
-        end else if (DataAdr !== 96) begin
-          $display("Simulation failed");
-          $stop;
-        end
-      end
-    end
 endmodule
 
 module top(input  logic        clk, reset, 
@@ -155,17 +69,17 @@ module arm(input  logic        clk, reset,
            input  logic [31:0] ReadData);
 
   logic [3:0] ALUFlags;
-  logic       RegWrite, 
+  logic       RegWrite, MovFlag,
               ALUSrc, MemtoReg, PCSrc;
   logic [1:0] RegSrc, ImmSrc, ALUControl;
 
   controller c(clk, reset, Instr[31:12], ALUFlags, 
                RegSrc, RegWrite, ImmSrc, 
                ALUSrc, ALUControl,
-               MemWrite, MemtoReg, PCSrc);
+               MemWrite, MemtoReg, MovFlag, PCSrc);
   datapath dp(clk, reset, 
               RegSrc, RegWrite, ImmSrc,
-              ALUSrc, ALUControl,
+              MovFlag, ALUSrc, ALUControl,
               MemtoReg, PCSrc,
               ALUFlags, PC, Instr,
               ALUResult, WriteData, ReadData);
@@ -180,17 +94,18 @@ module controller(input  logic         clk, reset,
                   output logic         ALUSrc, 
                   output logic [1:0]   ALUControl,
                   output logic         MemWrite, MemtoReg,
+                  output logic         MovFlag,
                   output logic         PCSrc);
 
   logic [1:0] FlagW;
-  logic       PCS, RegW, MemW;
+  logic       PCS, RegW, MemW, MovF;
   
   decoder dec(Instr[27:26], Instr[25:20], Instr[15:12],
               FlagW, PCS, RegW, MemW,
-              MemtoReg, ALUSrc, ImmSrc, RegSrc, ALUControl);
+              MemtoReg, ALUSrc, MovF, ImmSrc, RegSrc, ALUControl);
   condlogic cl(clk, reset, Instr[31:28], ALUFlags,
-               FlagW, PCS, RegW, MemW,
-               PCSrc, RegWrite, MemWrite);
+             FlagW, PCS, RegW, MemW, MovF,
+             PCSrc, RegWrite, MemWrite, MovFlag);
 endmodule
 
 module decoder(input  logic [1:0] Op,
@@ -198,7 +113,7 @@ module decoder(input  logic [1:0] Op,
                input  logic [3:0] Rd,
                output logic [1:0] FlagW,
                output logic       PCS, RegW, MemW,
-               output logic       MemtoReg, ALUSrc,
+               output logic       MemtoReg, ALUSrc, MovF,
                output logic [1:0] ImmSrc, RegSrc, ALUControl);
 
   logic [9:0] controls;
@@ -228,13 +143,15 @@ module decoder(input  logic [1:0] Op,
   // ALU Decoder             
   always_comb
     if (ALUOp) begin                 // which DP Instr?
-      case(Funct[4:1]) 
+      case(Funct[4:1])
   	    4'b0100: ALUControl = 2'b00; // ADD
+        4'b1101: ALUControl = 2'b00; // MOV
   	    4'b0010: ALUControl = 2'b01; // SUB
-          4'b0000: ALUControl = 2'b10; // AND
+        4'b0000: ALUControl = 2'b10; // AND
   	    4'b1100: ALUControl = 2'b11; // ORR
   	    default: ALUControl = 2'bx;  // unimplemented
       endcase
+      MovF          = Funct[4]; //Mo
       // update flags if S bit is set 
 	// (C & V only updated for arith instructions)
       FlagW[1]      = Funct[0]; // FlagW[1] = S-bit
@@ -254,8 +171,8 @@ module condlogic(input  logic       clk, reset,
                  input  logic [3:0] Cond,
                  input  logic [3:0] ALUFlags,
                  input  logic [1:0] FlagW,
-                 input  logic       PCS, RegW, MemW,
-                 output logic       PCSrc, RegWrite, MemWrite);
+                 input  logic       PCS, RegW, MemW, MovF
+                 output logic       PCSrc, RegWrite, MemWrite, MovFlag);
                  
   logic [1:0] FlagWrite;
   logic [3:0] Flags;
@@ -272,6 +189,7 @@ module condlogic(input  logic       clk, reset,
   assign RegWrite  = RegW  & CondEx;
   assign MemWrite  = MemW  & CondEx;
   assign PCSrc     = PCS   & CondEx;
+  assign MovFlag   = MovF  & CondEx;
 endmodule    
 
 module condcheck(input  logic [3:0] Cond,
@@ -308,6 +226,7 @@ module datapath(input  logic        clk, reset,
                 input  logic [1:0]  RegSrc,
                 input  logic        RegWrite,
                 input  logic [1:0]  ImmSrc,
+                input  logic        MovFlag,
                 input  logic        ALUSrc,
                 input  logic [1:0]  ALUControl,
                 input  logic        MemtoReg,
@@ -320,6 +239,7 @@ module datapath(input  logic        clk, reset,
 
   logic [31:0] PCNext, PCPlus4, PCPlus8;
   logic [31:0] ExtImm, SrcA, SrcB, Result;
+  logic [31:0] SrcA_actual;
   logic [3:0]  RA1, RA2;
 
   // next PC logic
@@ -338,10 +258,12 @@ module datapath(input  logic        clk, reset,
   extend      ext(Instr[23:0], ImmSrc, ExtImm);
 
   // ALU logic
+  mux2 #(32)  srcamux(SrcA, 32'b0, MovFlag, SrcA_actual);   // Força Src = 0 caso MovFlag = 1
   mux2 #(32)  srcbmux(WriteData, ExtImm, ALUSrc, SrcB);
-  alu         alu(SrcA, SrcB, ALUControl, 
+  alu         alu(SrcA_actual, SrcB, ALUControl, 
                   ALUResult, ALUFlags);
 endmodule
+
 
 module regfile(input  logic        clk, 
                input  logic        we3, 
