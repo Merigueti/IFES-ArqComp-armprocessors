@@ -120,22 +120,31 @@ module decoder(input  logic [1:0] Op,
   logic       Branch, ALUOp;
 
   // Main Decoder
-  
   always_comb
-  	case(Op)
-  	                        // Data processing immediate
-  	  2'b00: if (Funct[5])  controls = 10'b0000101001; 
-  	                        // Data processing register
-  	         else           controls = 10'b0000001001; 
-  	                        // LDR
-  	  2'b01: if (Funct[0])  controls = 10'b0001111000; 
-  	                        // STR
-  	         else           controls = 10'b1001110100; 
-  	                        // B
-  	  2'b10:                controls = 10'b0110100010; 
-  	                        // Unimplemented
-  	  default:              controls = 10'bx;          
-  	endcase
+    case(Op)
+                            // Data processing immediate
+      2'b00: begin
+        if (Funct[5]) begin // Immediate
+          if (Funct[4:1] == 4'b1010) // CMP
+            controls = 10'b0000100001; // RegW = 0
+          else
+            controls = 10'b0000101001;
+        end else begin      // Register
+          if (Funct[4:1] == 4'b1010) // CMP
+            controls = 10'b0000000001; // RegW = 0
+          else
+            controls = 10'b0000001001;
+        end
+      end
+                            // LDR
+      2'b01: if (Funct[0])  controls = 10'b0001111000; 
+                            // STR
+               else         controls = 10'b1001110100; 
+                            // B
+      2'b10:                controls = 10'b0110100010; 
+                            // Unimplemented
+      default:              controls = 10'bx;
+    endcase
 
   assign {RegSrc, ImmSrc, ALUSrc, MemtoReg, 
           RegW, MemW, Branch, ALUOp} = controls; 
@@ -144,34 +153,37 @@ module decoder(input  logic [1:0] Op,
   always_comb
     if (ALUOp) begin                 // which DP Instr?
       case(Funct[4:1])
-  	    4'b0100: ALUControl = 2'b00; // ADD
+        4'b0100: ALUControl = 2'b00; // ADD
         4'b1101: ALUControl = 2'b00; // MOV
-  	    4'b0010: ALUControl = 2'b01; // SUB
+        4'b0010: ALUControl = 2'b01; // SUB
+        4'b1010: ALUControl = 2'b01; // CMP usa SUB
         4'b0000: ALUControl = 2'b10; // AND
-  	    4'b1100: ALUControl = 2'b11; // ORR
-  	    default: ALUControl = 2'bx;  // unimplemented
+        4'b1100: ALUControl = 2'b11; // ORR
+        default: ALUControl = 2'bx;  // unimplemented
       endcase
-      MovF          = Funct[4]; //Mo
+      MovF     = (Funct[4:1] == 4'b1101); // MOV
       // update flags if S bit is set 
-	// (C & V only updated for arith instructions)
-      FlagW[1]      = Funct[0]; // FlagW[1] = S-bit
-	// FlagW[0] = S-bit & (ADD | SUB)
-      FlagW[0]      = Funct[0] & 
-        (ALUControl == 2'b00 | ALUControl == 2'b01); 
+      // (C & V only updated para aritméticas)
+      FlagW[1] = Funct[0]; // S-bit
+      FlagW[0] = Funct[0] & 
+                 (ALUControl == 2'b00 | ALUControl == 2'b01);
     end else begin
-      ALUControl = 2'b00; // add for non-DP instructions
+      ALUControl = 2'b00; // default ADD
       FlagW      = 2'b00; // don't update Flags
+      MovF       = 0;
     end
-              
+
   // PC Logic
-  assign PCS  = ((Rd == 4'b1111) & RegW) | Branch; 
+  assign PCS = ((Rd == 4'b1111) & RegW) | Branch;
+
 endmodule
+
 
 module condlogic(input  logic       clk, reset,
                  input  logic [3:0] Cond,
                  input  logic [3:0] ALUFlags,
                  input  logic [1:0] FlagW,
-                 input  logic       PCS, RegW, MemW, MovF
+                 input  logic       PCS, RegW, MemW, MovF,
                  output logic       PCSrc, RegWrite, MemWrite, MovFlag);
                  
   logic [1:0] FlagWrite;
@@ -364,5 +376,3 @@ module alu(input  logic [31:0] a, b,
                     (a[31] ^ sum[31]); 
   assign ALUFlags    = {neg, zero, carry, overflow};
 endmodule
-
-
